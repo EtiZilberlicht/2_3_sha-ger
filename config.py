@@ -1,0 +1,27 @@
+PORT = "COM3"
+BAUDRATE = 9600
+CAMERA_ID = 1
+
+YOLO_WEIGHTS = "yolov8n.pt"
+YOLO_TRACKER = "bytetrack.yaml"
+YOLO_CONF = 0.25
+YOLO_IOU_MATCH = 0.3
+
+SAM_WEIGHTS = "sam2_t.pt"
+ENABLE_SAM = False
+
+REID_EMBED_SIZE = 576
+REID_SIM_THRESHOLD = 0.85
+FOV_DEG_H = 60.0
+FOV_DEG_V = 45.0
+ANGLE_CMD_SCALE = 0.35
+
+FIRE_RADIUS_PX = 18
+STABLE_FRAMES_TO_FIRE = 8
+
+SMOOTH_ALPHA = 0.35
+
+# cpu | cuda (NVIDIA only) | intel:gpu | intel:cpu | intel:npu
+DEVICE = "intel:gpu"
+
+ENABLE_SERIAL = False
