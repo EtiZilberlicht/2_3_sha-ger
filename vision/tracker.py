@@ -109,6 +109,7 @@ class SentryTracker:
         self._last_center: Optional[Tuple[int, int]] = None
         self._lost_frames = 0
         self._reid_mismatch_frames = 0
+        self._aim_reset = False
         imgsz = config.YOLO_IMGSZ
         if self._infer_device.startswith("intel:"):
             imgsz = 640
@@ -119,6 +120,17 @@ class SentryTracker:
             "device": self._infer_device,
             "imgsz": imgsz,
         }
+
+    def get_aim_target(self) -> Optional[Tuple[int, int]]:
+        if self.status in ("LOCKED", "LOST") and self._last_center is not None:
+            return self._last_center
+        return None
+
+    def consume_aim_reset(self) -> bool:
+        if self._aim_reset:
+            self._aim_reset = False
+            return True
+        return False
 
     @staticmethod
     def _resolve_devices() -> Tuple[str, torch.device]:
@@ -320,6 +332,7 @@ class SentryTracker:
         self._reid_mismatch_frames = 0
         self._last_center = self._box_center(bb)
         self.current_mask = None
+        self._aim_reset = True
 
     def set_target_from_click(self, frame: np.ndarray, x: int, y: int) -> bool:
         for box in self.last_boxes:
@@ -362,7 +375,19 @@ class SentryTracker:
                 return None
             if self._pick_track:
                 pick = self._pick_track_index(frame, self.last_boxes, ids)
+                if pick is None and self._last_bbox is not None:
+                    best_i, best_iou = -1, 0.0
+                    for i, b in enumerate(self.last_boxes):
+                        v = _iou(self._last_bbox, b)
+                        if v > best_iou:
+                            best_iou, best_i = v, i
+                    if best_i >= 0 and best_iou >= 0.2:
+                        pick = int(ids[best_i])
                 if pick is None:
+                    if self._last_bbox is not None:
+                        _, center = self._target_center(frame, self._last_bbox)
+                        self._last_center = center
+                        return center
                     self.status = "LOST"
                     self._track_id = None
                     self._pick_track = True

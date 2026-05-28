@@ -190,6 +190,13 @@ void turnLaserOff() {
   digitalWrite(LASER_PIN, LOW);
 }
 
+void resetToHome() {
+  currentHorizontalAngle = INITIAL_HORIZONTAL_ANGLE;
+  currentVerticalAngle = INITIAL_VERTICAL_ANGLE;
+  horizontalServo.write(currentHorizontalAngle);
+  verticalServo.write(currentVerticalAngle);
+}
+
 // מבצע "ירי" באמצעות 3 הבהובים של הלייזר
 void fireLaser() {
   for (int i = 0; i < 3; i++) {
@@ -227,6 +234,10 @@ void loop() {
     // ===== LASER OFF =====
     else if (command == "LASER_OFF") {
       turnLaserOff();
+    }
+
+    else if (command == "RESET") {
+      resetToHome();
     }
 
     // ===== HORIZONTAL IMMEDIATE =====

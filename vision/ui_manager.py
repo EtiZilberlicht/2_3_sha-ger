@@ -17,14 +17,24 @@ class UIManager:
         frame: np.ndarray,
         status: str,
         target_center: Optional[Tuple[int, int]],
+        laser_center: Optional[Tuple[int, int]],
+        aim_point: Optional[Tuple[int, int]],
         mask: Optional[np.ndarray],
+        move_cmd: Optional[Tuple[int, int]] = None,
+        err: Optional[Tuple[int, int]] = None,
+        servo_angles: Optional[Tuple[int, int]] = None,
     ) -> np.ndarray:
         out = frame.copy()
         h, w = out.shape[:2]
-        cx, cy = w // 2, h // 2
-        cv2.line(out, (cx - 24, cy), (cx + 24, cy), (0, 255, 255), 1, cv2.LINE_AA)
-        cv2.line(out, (cx, cy - 24), (cx, cy + 24), (0, 255, 255), 1, cv2.LINE_AA)
-        cv2.circle(out, (cx, cy), 10, (0, 255, 255), 1, cv2.LINE_AA)
+        if aim_point is not None:
+            lx, ly = aim_point
+            cv2.circle(out, (lx, ly), 10, (0, 0, 255), 2, cv2.LINE_AA)
+            cv2.circle(out, (lx, ly), 3, (0, 0, 255), -1, cv2.LINE_AA)
+            if target_center is not None:
+                cv2.line(out, (lx, ly), target_center, (255, 100, 0), 1, cv2.LINE_AA)
+        elif laser_center is not None:
+            lx, ly = laser_center
+            cv2.circle(out, (lx, ly), 8, (0, 0, 255), 2, cv2.LINE_AA)
         if mask is not None and mask.shape[0] == h and mask.shape[1] == w:
             col = np.zeros_like(out)
             col[:, :] = (0, 200, 0)
@@ -40,10 +50,47 @@ class UIManager:
         else:
             color = (200, 200, 200)
         label = status
+        if aim_point is None:
+            label = f"{status} | LASER: searching..."
+        else:
+            label = f"{status} | LASER: locked"
         if target_center is not None:
             tx, ty = target_center
             cv2.circle(out, (tx, ty), 6, color, -1, cv2.LINE_AA)
             label = f"{status} ({tx},{ty})"
+        if err is not None:
+            cv2.putText(
+                out,
+                f"ERR px={err[0]},{err[1]}",
+                (12, 58),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.6,
+                (255, 200, 0),
+                1,
+                cv2.LINE_AA,
+            )
+        if move_cmd is not None:
+            cv2.putText(
+                out,
+                f"MOVE H={move_cmd[0]} V={move_cmd[1]}",
+                (12, h - 36),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.65,
+                (255, 255, 0),
+                2,
+                cv2.LINE_AA,
+            )
+        if servo_angles is not None:
+            cv2.putText(
+                out,
+                f"ANGLE H={servo_angles[0]} V={servo_angles[1]} (0-130)",
+                (12, h - 12),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.55,
+                (200, 200, 200),
+                1,
+                cv2.LINE_AA,
+            )
         cv2.putText(out, label, (12, 32), cv2.FONT_HERSHEY_SIMPLEX, 0.8, color, 2, cv2.LINE_AA)
         return out
 
