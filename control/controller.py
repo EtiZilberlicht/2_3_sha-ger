@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from typing import Tuple
 
 import config
@@ -45,6 +43,3 @@ class TurretController:
         else:
             self.lock_frame_counter = 0
         return self.lock_frame_counter >= self._stable_need
-
-    def reset_lock(self) -> None:
-        self.lock_frame_counter = 0

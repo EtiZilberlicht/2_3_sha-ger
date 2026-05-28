@@ -1,13 +1,9 @@
-from __future__ import annotations
-
-from typing import Optional
-
 import serial
 
 
 class SerialController:
     def __init__(self) -> None:
-        self._ser: Optional[serial.Serial] = None
+        self._ser = None
 
     def connect(self, port: str, baudrate: int) -> bool:
         try:

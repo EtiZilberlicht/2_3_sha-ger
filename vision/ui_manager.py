@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import List, Optional, Tuple
+from typing import Optional, Tuple
 
 import cv2
 import numpy as np
@@ -18,13 +18,9 @@ class UIManager:
         status: str,
         target_center: Optional[Tuple[int, int]],
         mask: Optional[np.ndarray],
-        boxes: Optional[List[Tuple[int, int, int, int]]] = None,
     ) -> np.ndarray:
         out = frame.copy()
         h, w = out.shape[:2]
-        if boxes:
-            for x1, y1, x2, y2 in boxes:
-                cv2.rectangle(out, (x1, y1), (x2, y2), (255, 180, 0), 2)
         cx, cy = w // 2, h // 2
         cv2.line(out, (cx - 24, cy), (cx + 24, cy), (0, 255, 255), 1, cv2.LINE_AA)
         cv2.line(out, (cx, cy - 24), (cx, cy + 24), (0, 255, 255), 1, cv2.LINE_AA)
@@ -48,27 +44,7 @@ class UIManager:
             tx, ty = target_center
             cv2.circle(out, (tx, ty), 6, color, -1, cv2.LINE_AA)
             label = f"{status} ({tx},{ty})"
-        cv2.putText(
-            out,
-            label,
-            (12, 32),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            0.8,
-            color,
-            2,
-            cv2.LINE_AA,
-        )
-        if status == "SEARCHING":
-            cv2.putText(
-                out,
-                "Click inside orange box to lock",
-                (12, h - 16),
-                cv2.FONT_HERSHEY_SIMPLEX,
-                0.55,
-                (255, 180, 0),
-                1,
-                cv2.LINE_AA,
-            )
+        cv2.putText(out, label, (12, 32), cv2.FONT_HERSHEY_SIMPLEX, 0.8, color, 2, cv2.LINE_AA)
         return out
 
     def mouse_callback(self, event: int, x: int, y: int, flags: int, param: object) -> None:

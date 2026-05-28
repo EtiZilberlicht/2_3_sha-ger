@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import cv2
 
 import config
@@ -9,19 +7,22 @@ from vision.tracker import SentryTracker
 from vision.ui_manager import UIManager
 
 
-def main() -> None:
+def main():
     tracker = SentryTracker()
     ui = UIManager()
     controller = TurretController()
     serial = SerialController()
-    if config.ENABLE_SERIAL:
-        serial.connect(config.PORT, config.BAUDRATE)
-    cap = cv2.VideoCapture(config.CAMERA_ID)
-    cv2.namedWindow(ui.window_name)
-    cv2.setMouseCallback(ui.window_name, ui.mouse_callback, param=tracker)
+    serial.connect(config.PORT, config.BAUDRATE)
+    cap = cv2.VideoCapture(config.CAMERA_ID, cv2.CAP_DSHOW)
+    if not cap.isOpened():
+        cap = cv2.VideoCapture(config.CAMERA_ID)
+    if not cap.isOpened():
+        raise RuntimeError(f"Camera {config.CAMERA_ID} not found — change CAMERA_ID in config.py")
+    cv2.namedWindow("Sentry AI Turret")
+    cv2.setMouseCallback("Sentry AI Turret", ui.mouse_callback, param=tracker)
     while cap.isOpened():
-        ok, frame = cap.read()
-        if not ok:
+        success, frame = cap.read()
+        if not success:
             break
         target_center = tracker.update(frame)
         if target_center is not None:
@@ -36,13 +37,10 @@ def main() -> None:
             else:
                 serial.send_fire_signal(False)
         else:
-            controller.reset_lock()
             serial.send_fire_signal(False)
-        annotated = ui.draw_hud(
-            frame, tracker.status, target_center, tracker.current_mask, tracker.last_boxes
-        )
-        cv2.imshow(ui.window_name, annotated)
-        if (cv2.waitKey(1) & 0xFF) == ord("q"):
+        annotated_frame = ui.draw_hud(frame, tracker.status, target_center, tracker.current_mask)
+        cv2.imshow("Sentry AI Turret", annotated_frame)
+        if cv2.waitKey(1) & 0xFF == ord("q"):
             break
     cap.release()
     cv2.destroyAllWindows()
