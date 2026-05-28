@@ -31,21 +31,27 @@ class SerialController:
         self._ser.write(cmd.encode("ascii"))
         self._ser.flush()
 
-    def send_move(self, delta_x: int, delta_y: int) -> None:
+    def send_move(self, delta_h: int, delta_v: int) -> None:
         if self._ser is None:
             return
-        if delta_x != 0:
-            self._write(f"H {delta_x}\n")
-        if delta_y != 0:
-            self._write(f"V {delta_y}\n")
-        if delta_x != 0 or delta_y != 0:
-            print(f"→ Arduino: H {delta_x}  V {delta_y}")
+        if delta_h != 0:
+            self._write(f"H {delta_h}\n")
+        if delta_v != 0:
+            self._write(f"V {delta_v}\n")
+        if delta_h != 0 or delta_v != 0:
+            print(f"→ Arduino: H {delta_h}  V {delta_v}")
+
+    def send_goto(self, h: int, v: int) -> None:
+        if self._ser is None:
+            return
+        self._write(f"G {h} {v}\n")
+        print(f"→ Arduino: G {h} {v}")
 
     def send_reset(self) -> None:
         if self._ser is None:
             return
         self._write("RESET\n")
-        print("→ Arduino: RESET (home 0,0)")
+        print("→ Arduino: RESET")
 
     def send_laser_state(self, on: bool, force: bool = False) -> None:
         if self._ser is None:
@@ -62,37 +68,29 @@ class SerialController:
             return
         self._write("FIRE\n")
 
-    def homing(self, controller=None, from_tracked: bool = False) -> None:
+    def homing(self, controller=None) -> None:
         if self._ser is None:
             return
-        if from_tracked and controller is not None:
-            h, v = controller.servo_angles
-            dh = config.SERVO_INIT_H - h
-            dv = config.SERVO_INIT_V - v
-            if dh != 0 or dv != 0:
-                self.send_move(dh, dv)
-                time.sleep(0.4)
-        self.send_reset()
-        time.sleep(0.3)
+        ih, iv = config.SERVO_INIT_H, config.SERVO_INIT_V
+        self.send_goto(ih, iv)
+        time.sleep(0.6)
         if controller is not None:
             controller.reset_home()
 
     def startup(self, controller) -> None:
         if self._ser is None:
             return
-        print("Homing turret to start position (0,0)...")
+        print("Homing turret to start position...")
         self.send_laser_state(False, force=True)
-        time.sleep(0.15)
-        self.homing(controller, from_tracked=False)
         time.sleep(0.2)
-        self.homing(controller, from_tracked=False)
+        self.homing(controller)
 
     def shutdown(self, controller=None) -> None:
         if self._ser is None:
             return
         self.send_laser_state(False, force=True)
         time.sleep(0.2)
-        self.homing(controller, from_tracked=True)
+        self.homing(controller)
 
     def close(self) -> None:
         if self._ser is not None:

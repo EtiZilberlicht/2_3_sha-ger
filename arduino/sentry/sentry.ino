@@ -6,22 +6,45 @@ const int VERTICAL_SERVO_PIN   = 10;
 const int LASER_PIN            = 11;
 
 // === angles ===
-const int MIN_ANGLE = 0;
-const int MAX_ANGLE = 130;
+const int H_MIN = 0;
+const int H_MAX = 130;
+const int V_MIN = 0;
+const int V_MAX = 70;
+const int V_NEUTRAL_PULSE = 0;
 
-// ===== Servo objects =====
 Servo horizontalServo;
 Servo verticalServo;
 
-// ===== Current angles =====
-// הזוויות הנוכחיות של המערכת
-int currentHorizontalAngle = 0;
-int currentVerticalAngle = 0;
+int currentHorizontalAngle = 75;
+int currentVerticalAngle = 20;
 
-// ===== Initial values =====
-const int INITIAL_HORIZONTAL_ANGLE = 0;
-const int INITIAL_VERTICAL_ANGLE   = 0;
+const int INITIAL_HORIZONTAL_ANGLE = 75;
+const int INITIAL_VERTICAL_ANGLE = 20;
 const int LASER_OFF = LOW;
+
+int clampHorizontal(int angle) {
+  if (angle < H_MIN) return H_MIN;
+  if (angle > H_MAX) return H_MAX;
+  return angle;
+}
+
+int clampVertical(int angle) {
+  if (angle < V_MIN) return V_MIN;
+  if (angle > V_MAX) return V_MAX;
+  return angle;
+}
+
+int verticalServoPulse(int logicalAngle) {
+  int pulse = V_NEUTRAL_PULSE + clampVertical(logicalAngle);
+  if (pulse < 0) return 0;
+  if (pulse > 90) return 90;
+  return pulse;
+}
+
+void writeVertical(int logicalAngle) {
+  currentVerticalAngle = clampVertical(logicalAngle);
+  verticalServo.write(verticalServoPulse(currentVerticalAngle));
+}
 
 void setup() {
   // פתיחת תקשורת מול פייתון
@@ -38,71 +61,27 @@ void setup() {
   currentHorizontalAngle = INITIAL_HORIZONTAL_ANGLE;
   currentVerticalAngle = INITIAL_VERTICAL_ANGLE;
 
-  // הזזת הסרווים למצב התחלתי
   horizontalServo.write(currentHorizontalAngle);
-  verticalServo.write(currentVerticalAngle);
+  writeVertical(currentVerticalAngle);
 
-  // כיבוי לייזר
   turnLaserOff();
 }
 
-/*
-  מוודא שהזווית לא חורגת מהטווח החוקי של הסרוו
-  אם קטנה מ-0 נחזיר 0
-  אם גדולה מ-180 נחזיר 180
-*/
-int clampAngle(int angle) {
-  if (angle < MIN_ANGLE) {
-    return MIN_ANGLE;
-  }
-
-  if (angle > MAX_ANGLE) {
-    return MAX_ANGLE;
-  }
-
-  return angle;
-}
-
-// מזיז את המנוע האופקי באופן מיידי
 void moveHorizontalBy(int deltaAngle) {
-
-  // חישוב זווית יעד חדשה
-  int targetAngle = currentHorizontalAngle + deltaAngle;
-
-  // מוודאים שלא חורגים מהמקסימום/מינימום
-  targetAngle = clampAngle(targetAngle);
-
-  // הזזה מיידית של הסרוו לזווית החדשה
+  int targetAngle = clampHorizontal(currentHorizontalAngle + deltaAngle);
   horizontalServo.write(targetAngle);
-
-  // עדכון המשתנה הגלובלי לזווית החדשה
   currentHorizontalAngle = targetAngle;
 }
 
-// מזיז את המנוע האנכי באופן מיידי
 void moveVerticalBy(int deltaAngle) {
-
-  // חישוב זווית יעד
-  int targetAngle = currentVerticalAngle + deltaAngle;
-
-  // הגבלת הזווית לטווח חוקי
-  targetAngle = clampAngle(targetAngle);
-
-  // הזזת הסרוו
-  verticalServo.write(targetAngle);
-
-  // שמירת הזווית החדשה
-  currentVerticalAngle = targetAngle;
+  writeVertical(currentVerticalAngle + deltaAngle);
 }
 
 // מזיז את המנוע האופקי בהדרגה, במקום ישירות - בקפיצות של 5 עם דיליי של 100 מילי שניות
 void moveHorizontalBySmooth(int deltaAngle) {
 
   // חישוב זווית היעד
-  int targetAngle = currentHorizontalAngle + deltaAngle;
-
-  // מוודאים שלא חורגים מטווח חוקי
-  targetAngle = clampAngle(targetAngle);
+  int targetAngle = clampHorizontal(currentHorizontalAngle + deltaAngle);
 
   // כל עוד לא הגענו ליעד, ממשיכים להזיז את המנוע
   while (currentHorizontalAngle != targetAngle) {
@@ -143,39 +122,21 @@ void moveHorizontalBySmooth(int deltaAngle) {
 void moveVerticalBySmooth(int deltaAngle) {
 
   // חישוב יעד חדש
-  int targetAngle = currentVerticalAngle + deltaAngle;
+  int targetAngle = clampVertical(currentVerticalAngle + deltaAngle);
 
-  // הגבלת זווית
-  targetAngle = clampAngle(targetAngle);
-
-  // ממשיכים עד שמגיעים ליעד
   while (currentVerticalAngle != targetAngle) {
-
-    // אם צריך לעלות בזווית
     if (currentVerticalAngle < targetAngle) {
-
       currentVerticalAngle += 5;
-
-      // תיקון במקרה שעברנו את היעד
       if (currentVerticalAngle > targetAngle) {
         currentVerticalAngle = targetAngle;
       }
-
     } else {
-
-      // אם צריך לרדת בזווית
       currentVerticalAngle -= 5;
-
-      // תיקון במקרה שירדנו יותר מדי
       if (currentVerticalAngle < targetAngle) {
         currentVerticalAngle = targetAngle;
       }
     }
-
-    // הזזת המנוע
-    verticalServo.write(currentVerticalAngle);
-
-    // המתנה קטנה לתנועה חלקה
+    verticalServo.write(verticalServoPulse(currentVerticalAngle));
     delay(100);
   }
 }
@@ -190,11 +151,14 @@ void turnLaserOff() {
   digitalWrite(LASER_PIN, LOW);
 }
 
-void resetToHome() {
-  currentHorizontalAngle = INITIAL_HORIZONTAL_ANGLE;
-  currentVerticalAngle = INITIAL_VERTICAL_ANGLE;
+void gotoAngles(int h, int v) {
+  currentHorizontalAngle = clampHorizontal(h);
   horizontalServo.write(currentHorizontalAngle);
-  verticalServo.write(currentVerticalAngle);
+  writeVertical(v);
+}
+
+void resetToHome() {
+  gotoAngles(INITIAL_HORIZONTAL_ANGLE, INITIAL_VERTICAL_ANGLE);
 }
 
 // מבצע "ירי" באמצעות 3 הבהובים של הלייזר
@@ -238,6 +202,15 @@ void loop() {
 
     else if (command == "RESET") {
       resetToHome();
+    }
+
+    else if (command.startsWith("G ")) {
+      int sp = command.indexOf(' ', 2);
+      if (sp > 0) {
+        int h = command.substring(2, sp).toInt();
+        int v = command.substring(sp + 1).toInt();
+        gotoAngles(h, v);
+      }
     }
 
     // ===== HORIZONTAL IMMEDIATE =====

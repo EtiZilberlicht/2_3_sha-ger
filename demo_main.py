@@ -8,7 +8,6 @@ from control.serial_sender import SerialController
 from vision.tracker import SentryTracker
 from vision.ui_manager import UIManager
 
-FIRE_DURATION_SEC = 3.0
 
 def main():
     serial = SerialController()
@@ -36,8 +35,6 @@ def main():
     cv2.namedWindow("Sentry AI Turret")
     cv2.setMouseCallback("Sentry AI Turret", ui.mouse_callback, param=tracker)
     frame_i = 0
-    last_fire_angles: tuple[int, int] | None = None
-    fire_until = 0.0
     last_move_at = 0.0
     try:
         while cap.isOpened():
@@ -46,14 +43,12 @@ def main():
                 break
             frame_i += 1
             now = time.time()
-            firing = now < fire_until
             if serial.connected and frame_i % 120 == 1:
                 serial.send_laser_state(True, force=True)
 
             tracker.update(frame)
             if tracker.consume_aim_reset():
                 controller.reset_aim()
-                last_fire_angles = None
 
             target_center = tracker.get_aim_target()
             fh, fw = frame.shape[:2]
@@ -70,17 +65,11 @@ def main():
                     if h_cmd != 0 or v_cmd != 0:
                         serial.send_move(h_cmd, v_cmd)
                         last_move_at = now
-                if not firing:
-                    angles = controller.servo_angles
-                    moved_since_fire = last_fire_angles is None or angles != last_fire_angles
-                    if moved_since_fire and controller.validate_fire(err_x, err_y):
-                        fire_until = now + FIRE_DURATION_SEC
-                        last_fire_angles = angles
-                        controller.reset_aim()
-                        serial.send_laser_state(True, force=True)
-                        print(f"→ Firing for {FIRE_DURATION_SEC:.0f}s")
-            if firing and serial.connected:
-                serial.send_laser_state(True, force=True)
+                if controller.validate_fire(err_x, err_y):
+                    serial.send_fire()
+                    print("Target locked — fired. Demo complete.")
+                    break
+
             annotated_frame = ui.draw_hud(
                 frame,
                 tracker.status,
