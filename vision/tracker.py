@@ -108,11 +108,13 @@ class SentryTracker:
         self._sam_frames = 0
         self._last_center: Optional[Tuple[int, int]] = None
         self._lost_frames = 0
+        self._reid_mismatch_frames = 0
         imgsz = config.YOLO_IMGSZ
         if self._infer_device.startswith("intel:"):
             imgsz = 640
         self._yolo_kw = {
             "conf": config.YOLO_CONF,
+            "classes": config.YOLO_CLASSES,
             "verbose": False,
             "device": self._infer_device,
             "imgsz": imgsz,
@@ -139,10 +141,16 @@ class SentryTracker:
             return config.DEVICE.strip(), torch.device("cpu")
         return "cpu", torch.device("cpu")
 
+    @staticmethod
+    def _reid_bbox(bbox: Tuple[int, int, int, int]) -> Tuple[int, int, int, int]:
+        x1, y1, x2, y2 = bbox
+        bh = max(1, y2 - y1)
+        return x1, y1, x2, y1 + max(1, int(bh * config.REID_UPPER_BODY_RATIO))
+
     @torch.inference_mode()
     def _embed_crop(self, frame: np.ndarray, bbox: Tuple[int, int, int, int]) -> np.ndarray:
         h, w = frame.shape[:2]
-        x1, y1, x2, y2 = _clamp_box(bbox, w, h)
+        x1, y1, x2, y2 = _clamp_box(self._reid_bbox(bbox), w, h)
         crop = frame[y1:y2, x1:x2]
         if crop.size == 0:
             return np.zeros((config.REID_EMBED_SIZE,), dtype=np.float32)
@@ -179,6 +187,35 @@ class SentryTracker:
         if gallery >= config.REID_REACQUIRE_THRESHOLD and anchor >= config.REID_ANCHOR_MIN_SIM:
             return True
         return False
+
+    def _verify_identity(self, frame: np.ndarray, bb: Tuple[int, int, int, int]) -> bool:
+        emb = self._embed_crop(frame, bb)
+        anchor, gallery = self._person_score(emb)
+        return gallery >= config.REID_LOCK_VERIFY_THRESHOLD and anchor >= config.REID_ANCHOR_MIN_SIM
+
+    def _pick_track_index(
+        self,
+        frame: np.ndarray,
+        boxes: List[Tuple[int, int, int, int]],
+        ids: np.ndarray,
+    ) -> Optional[int]:
+        scored: List[Tuple[int, float, float, float]] = []
+        for i, b in enumerate(boxes):
+            iou = _iou(self._last_bbox, b) if self._last_bbox else 1.0
+            emb = self._embed_crop(frame, b)
+            anchor, gallery = self._person_score(emb)
+            if gallery < config.REID_LOCK_VERIFY_THRESHOLD:
+                continue
+            if iou < config.REID_PICK_IOU_MIN and anchor < config.REID_REACQUIRE_THRESHOLD:
+                continue
+            scored.append((i, gallery + iou * 0.15, anchor, gallery))
+        if not scored:
+            return None
+        scored.sort(key=lambda x: x[1], reverse=True)
+        if len(scored) >= 2:
+            if scored[0][3] - scored[1][3] < config.REID_MATCH_MARGIN:
+                return None
+        return int(ids[scored[0][0]])
 
     def _find_lost_match(
         self, frame: np.ndarray, boxes: List[Tuple[int, int, int, int]]
@@ -280,6 +317,7 @@ class SentryTracker:
         self._last_bbox = bb
         self._reid_frames = 0
         self._lost_frames = 0
+        self._reid_mismatch_frames = 0
         self._last_center = self._box_center(bb)
         self.current_mask = None
 
@@ -322,30 +360,41 @@ class SentryTracker:
                 self._pick_track = True
                 self._lost_frames = 0
                 return None
-            if self._pick_track and self._last_bbox is not None:
-                best_i, best_iou = -1, 0.0
-                for i, b in enumerate(self.last_boxes):
-                    v = _iou(self._last_bbox, b)
-                    if v > best_iou:
-                        best_iou, best_i = v, i
-                if best_i < 0 or best_iou < 0.3:
+            if self._pick_track:
+                pick = self._pick_track_index(frame, self.last_boxes, ids)
+                if pick is None:
                     self.status = "LOST"
                     self._track_id = None
                     self._pick_track = True
                     self._lost_frames = 0
+                    self._reid_mismatch_frames = 0
                     return None
-                self._track_id = int(ids[best_i])
+                self._track_id = pick
                 self._pick_track = False
+                self._reid_mismatch_frames = 0
             idx = next((i for i, tid in enumerate(ids) if int(tid) == self._track_id), -1)
             if idx < 0:
                 self.status = "LOST"
                 self._track_id = None
                 self._pick_track = True
                 self._lost_frames = 0
+                self._reid_mismatch_frames = 0
                 return None
             bb = self.last_boxes[idx]
             self._last_bbox = bb
             self._reid_frames += 1
+            if self._reid_frames % config.REID_LOCK_VERIFY_INTERVAL == 0:
+                if self._verify_identity(frame, bb):
+                    self._reid_mismatch_frames = 0
+                else:
+                    self._reid_mismatch_frames += 1
+                if self._reid_mismatch_frames >= config.REID_LOCK_MISMATCH_MAX:
+                    self.status = "LOST"
+                    self._track_id = None
+                    self._pick_track = True
+                    self._lost_frames = 0
+                    self._reid_mismatch_frames = 0
+                    return None
             if self._reid_frames >= config.REID_UPDATE_INTERVAL:
                 self._add_to_gallery(self._embed_crop(frame, bb))
                 self._reid_frames = 0
@@ -370,6 +419,7 @@ class SentryTracker:
             self._pick_track = True
             self._reid_frames = 0
             self._lost_frames = 0
+            self._reid_mismatch_frames = 0
             self._add_to_gallery(self._embed_crop(frame, best_box))
             _, center = self._target_center(frame, best_box)
             self._last_center = center

@@ -1,7 +1,7 @@
 import time
 import serial
 
-PORT = "COM5"        # לשנות לפי הפורט של הארדואינו
+PORT = "COM3"        # לשנות לפי הפורט של הארדואינו
 BAUD_RATE = 9600
 
 def send_command(ser, command):
