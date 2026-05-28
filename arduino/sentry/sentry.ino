@@ -1,123 +1,284 @@
 #include <Servo.h>
 
-// Pin configurations - adjust these to match your actual wiring
-const int HORIZONTAL_SERVO_PIN = 9;       // Pin for horizontal (pan) servo
-const int VERTICAL_SERVO_PIN = 10;        // Pin for vertical (tilt) servo
-const int LASER_PIN = 11;                 // Pin for laser control
+// ===== Pins =====
+const int HORIZONTAL_SERVO_PIN = 9;
+const int VERTICAL_SERVO_PIN   = 10;
+const int LASER_PIN            = 11;
 
-Servo horizontalServo;              // Servo object to control horizontal motor
-Servo verticalServo;                // Servo object to control vertical motor
+// === angles ===
+const int MIN_ANGLE = 0;
+const int MAX_ANGLE = 130;
 
-// Servo speed configurations
-const int HORIZONTAL_STEP_DELAY_MS = 30;  // Milliseconds to wait per degree for horizontal (pan)
-const int VERTICAL_STEP_DELAY_MS = 100;   // Milliseconds to wait per degree for vertical (tilt) - slower for heavy load
+// ===== Servo objects =====
+Servo horizontalServo;
+Servo verticalServo;
 
-// Horizontal limits
-const int HORIZONTAL_MIN = 60;            // Moderated minimum sweep angle (degrees)
-const int HORIZONTAL_MAX = 120;           // Moderated maximum sweep angle (degrees)
-const int HORIZONTAL_CENTER = 90;         // Center angle (degrees)
+// ===== Current angles =====
+// הזוויות הנוכחיות של המערכת
+int currentHorizontalAngle = 0;
+int currentVerticalAngle = 0;
 
-// Vertical limits (Restricted to safe range between 70 and 0 degrees)
-const int VERTICAL_CENTER = 70;           // Physical right angle/resting position (upper limit)
-const int VERTICAL_MIN = 50;              // Safe non-edge minimum angle (20 degrees of total travel)
-
-int currentHorizontalAngle = HORIZONTAL_CENTER;
-int currentVerticalAngle = VERTICAL_CENTER;
-
-// Helper function declaration
-void moveSlowly(Servo &servo, int &currentAngle, int targetAngle, int stepDelayMs);
+// ===== Initial values =====
+const int INITIAL_HORIZONTAL_ANGLE = 0;
+const int INITIAL_VERTICAL_ANGLE   = 0;
+const int LASER_OFF = LOW;
 
 void setup() {
+  // פתיחת תקשורת מול פייתון
   Serial.begin(9600);
-  while (!Serial) {
-    ; // Wait for serial port to connect
-  }
-  Serial.println("--- Sentry Simple Dual Servo & Laser Test (Runs Once) ---");
-  
-  // Set up laser pin
-  pinMode(LASER_PIN, OUTPUT);
-  digitalWrite(LASER_PIN, LOW); // Start with laser off
 
-  // // Attach and set initial position of horizontal servo
-  // horizontalServo.attach(HORIZONTAL_SERVO_PIN);
-  // horizontalServo.write(currentHorizontalAngle);
-
-  // Attach and set initial position of vertical servo
-  verticalServo.attach(VERTICAL_SERVO_PIN);
-  verticalServo.write(0);
-
-  
-  delay(1000); // Allow time for servos to reach initial positions
-
+  // חיבור הסרווים לפינים
   horizontalServo.attach(HORIZONTAL_SERVO_PIN);
-  // horizontalServo.write(80);
-  //   digitalWrite(LASER_PIN, HIGH); // Start with laser off
-  // verticalServo.write(10);
+  verticalServo.attach(VERTICAL_SERVO_PIN);
 
-  //   delay(1000); // Allow time for servos to reach initial positions
-  // horizontalServo.write(100);
-  //   delay(1000); // Allow time for servos to reach initial positions
-  // verticalServo.write(30);
-  //     delay(1000); // Allow time for servos to reach initial positions
+  // הגדרת הלייזר כפלט
+  pinMode(LASER_PIN, OUTPUT);
 
-    // verticalServo.write(5);
-    // delay(100);
-    // verticalServo.write(10);
-    // delay(100);
-    // verticalServo.write(15);
-    // delay(100);
-    // verticalServo.write(20);
-    // delay(100);
-    // verticalServo.write(25);
+  // איפוס זוויות
+  currentHorizontalAngle = INITIAL_HORIZONTAL_ANGLE;
+  currentVerticalAngle = INITIAL_VERTICAL_ANGLE;
 
+  // הזזת הסרווים למצב התחלתי
+  horizontalServo.write(currentHorizontalAngle);
+  verticalServo.write(currentVerticalAngle);
 
-
-
-
-
-  // // 1. Turn laser ON and move horizontal slowly to MAX
-  // Serial.println("Laser ON. Moving horizontal slowly to MAX...");
-  // digitalWrite(LASER_PIN, HIGH);
-  // moveSlowly(horizontalServo, currentHorizontalAngle, HORIZONTAL_MAX, HORIZONTAL_STEP_DELAY_MS);
-  // delay(500);
-
-  // // 2. Move vertical slowly to MIN (50 degrees - gentle downward motion)
-  // Serial.println("Moving vertical slowly to MIN (50 degrees)...");
-  // moveSlowly(verticalServo, currentVerticalAngle, VERTICAL_MIN, VERTICAL_STEP_DELAY_MS);
-  // delay(500);
-
-  // // 3. Turn laser OFF and move horizontal slowly to MIN
-  // Serial.println("Laser OFF. Moving horizontal slowly to MIN...");
-  // digitalWrite(LASER_PIN, LOW);
-  // moveSlowly(horizontalServo, currentHorizontalAngle, HORIZONTAL_MIN, HORIZONTAL_STEP_DELAY_MS);
-  // delay(500);
-
-  // // 4. Move vertical slowly back to CENTER (70 degrees - gentle upward motion)
-  // Serial.println("Moving vertical slowly back to CENTER (70 degrees)...");
-  // moveSlowly(verticalServo, currentVerticalAngle, VERTICAL_CENTER, VERTICAL_STEP_DELAY_MS);
-  // delay(500);
-
-  // // 5. Turn laser ON and return horizontal slowly to center
-  // Serial.println("Laser ON. Returning horizontal slowly to center...");
-  // digitalWrite(LASER_PIN, HIGH);
-  // moveSlowly(horizontalServo, currentHorizontalAngle, HORIZONTAL_CENTER, HORIZONTAL_STEP_DELAY_MS);
-  // delay(500);
-  
-  // 6. Turn laser OFF
- // digitalWrite(LASER_PIN, LOW);
-  Serial.println("Laser OFF. Test completed.");
+  // כיבוי לייזר
+  turnLaserOff();
 }
 
+/*
+  מוודא שהזווית לא חורגת מהטווח החוקי של הסרוו
+  אם קטנה מ-0 נחזיר 0
+  אם גדולה מ-180 נחזיר 180
+*/
+int clampAngle(int angle) {
+  if (angle < MIN_ANGLE) {
+    return MIN_ANGLE;
+  }
+
+  if (angle > MAX_ANGLE) {
+    return MAX_ANGLE;
+  }
+
+  return angle;
+}
+
+// מזיז את המנוע האופקי באופן מיידי
+void moveHorizontalBy(int deltaAngle) {
+
+  // חישוב זווית יעד חדשה
+  int targetAngle = currentHorizontalAngle + deltaAngle;
+
+  // מוודאים שלא חורגים מהמקסימום/מינימום
+  targetAngle = clampAngle(targetAngle);
+
+  // הזזה מיידית של הסרוו לזווית החדשה
+  horizontalServo.write(targetAngle);
+
+  // עדכון המשתנה הגלובלי לזווית החדשה
+  currentHorizontalAngle = targetAngle;
+}
+
+// מזיז את המנוע האנכי באופן מיידי
+void moveVerticalBy(int deltaAngle) {
+
+  // חישוב זווית יעד
+  int targetAngle = currentVerticalAngle + deltaAngle;
+
+  // הגבלת הזווית לטווח חוקי
+  targetAngle = clampAngle(targetAngle);
+
+  // הזזת הסרוו
+  verticalServo.write(targetAngle);
+
+  // שמירת הזווית החדשה
+  currentVerticalAngle = targetAngle;
+}
+
+// מזיז את המנוע האופקי בהדרגה, במקום ישירות - בקפיצות של 5 עם דיליי של 100 מילי שניות
+void moveHorizontalBySmooth(int deltaAngle) {
+
+  // חישוב זווית היעד
+  int targetAngle = currentHorizontalAngle + deltaAngle;
+
+  // מוודאים שלא חורגים מטווח חוקי
+  targetAngle = clampAngle(targetAngle);
+
+  // כל עוד לא הגענו ליעד, ממשיכים להזיז את המנוע
+  while (currentHorizontalAngle != targetAngle) {
+
+    // אם צריך לגדול
+    if (currentHorizontalAngle < targetAngle) {
+
+      // קפיצה של 5 מעלות
+      currentHorizontalAngle += 5;
+
+      // אם עברנו את היעד בגלל הקפיצה, נתקן בדיוק ליעד
+      if (currentHorizontalAngle > targetAngle) {
+        currentHorizontalAngle = targetAngle;
+      }
+
+    } else {
+
+      // אם צריך להקטין זווית
+      currentHorizontalAngle -= 5;
+
+      /*
+       // תיקון במקרה שירדנו יותר מדי
+      */
+      if (currentHorizontalAngle < targetAngle) {
+        currentHorizontalAngle = targetAngle;
+      }
+    }
+
+    // הזזת המנוע לזווית החדשה
+    horizontalServo.write(currentHorizontalAngle);
+
+    // המתנה של 100 מילישניות
+    delay(100);
+  }
+}
+
+// מזיז את המנוע האנכי בצורה חלקה
+void moveVerticalBySmooth(int deltaAngle) {
+
+  // חישוב יעד חדש
+  int targetAngle = currentVerticalAngle + deltaAngle;
+
+  // הגבלת זווית
+  targetAngle = clampAngle(targetAngle);
+
+  // ממשיכים עד שמגיעים ליעד
+  while (currentVerticalAngle != targetAngle) {
+
+    // אם צריך לעלות בזווית
+    if (currentVerticalAngle < targetAngle) {
+
+      currentVerticalAngle += 5;
+
+      // תיקון במקרה שעברנו את היעד
+      if (currentVerticalAngle > targetAngle) {
+        currentVerticalAngle = targetAngle;
+      }
+
+    } else {
+
+      // אם צריך לרדת בזווית
+      currentVerticalAngle -= 5;
+
+      // תיקון במקרה שירדנו יותר מדי
+      if (currentVerticalAngle < targetAngle) {
+        currentVerticalAngle = targetAngle;
+      }
+    }
+
+    // הזזת המנוע
+    verticalServo.write(currentVerticalAngle);
+
+    // המתנה קטנה לתנועה חלקה
+    delay(100);
+  }
+}
+
+// מדליק את הלייזר
+void turnLaserOn() {
+  digitalWrite(LASER_PIN, HIGH);
+}
+
+// מכבה את הלייזר
+void turnLaserOff() {
+  digitalWrite(LASER_PIN, LOW);
+}
+
+// מבצע "ירי" באמצעות 3 הבהובים של הלייזר
+void fireLaser() {
+  for (int i = 0; i < 3; i++) {
+
+    // הדלקת לייזר
+    turnLaserOn();
+    delay(150);
+
+    // כיבוי לייזר
+    turnLaserOff();
+    delay(150);
+  }
+}
 void loop() {
-  // Empty - we do not repeat the test
-}
 
-// Function to move the servo slowly to a target angle
-void moveSlowly(Servo &servo, int &currentAngle, int targetAngle, int stepDelayMs) {
-  int step = (targetAngle > currentAngle) ? 1 : -1;
-  while (currentAngle != targetAngle) {
-    currentAngle += step;
-    servo.write(currentAngle);
-    delay(stepDelayMs);
+  // בודקים אם הגיע מידע מהפייתון
+  if (Serial.available() > 0) {
+
+    // קוראים שורה מלאה עד ירידת שורה
+    String command = Serial.readStringUntil('\n');
+
+    // מנקה רווחים ו-enter מיותרים
+    command.trim();
+
+    // ===== FIRE =====
+    if (command == "FIRE") {
+      fireLaser();
+    }
+
+    // ===== LASER ON =====
+    else if (command == "LASER_ON") {
+      turnLaserOn();
+    }
+
+    // ===== LASER OFF =====
+    else if (command == "LASER_OFF") {
+      turnLaserOff();
+    }
+
+    // ===== HORIZONTAL IMMEDIATE =====
+    // דוגמא:
+    // H 20
+    else if (command.startsWith("H ")) {
+
+      // לוקחים את כל מה שאחרי H
+      String valueString = command.substring(2);
+
+      // ממירים למספר
+      int deltaAngle = valueString.toInt();
+
+      // מזיזים מנוע אופקי
+      moveHorizontalBy(deltaAngle);
+    }
+
+    // ===== VERTICAL IMMEDIATE =====
+    // דוגמא:
+    // V -20
+    else if (command.startsWith("V ")) {
+
+      String valueString = command.substring(2);
+      int deltaAngle = valueString.toInt();
+
+      moveVerticalBy(deltaAngle);
+    }
+
+    // ===== HORIZONTAL SMOOTH =====
+    // דוגמא:
+    // HS 40
+    else if (command.startsWith("HS ")) {
+
+      // substring(3) כי יש:
+      // H S רווח
+      String valueString = command.substring(3);
+
+      int deltaAngle = valueString.toInt();
+
+      moveHorizontalBySmooth(deltaAngle);
+    }
+
+    // ===== VERTICAL SMOOTH =====
+    // דוגמא:
+    // VS -40
+    else if (command.startsWith("VS ")) {
+
+      String valueString = command.substring(3);
+
+      int deltaAngle = valueString.toInt();
+
+      moveVerticalBySmooth(deltaAngle);
+    }
   }
 }
