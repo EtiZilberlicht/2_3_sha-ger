@@ -68,6 +68,7 @@ def main():
     fire_r2 = DEMO_FIRE_RADIUS_PX * DEMO_FIRE_RADIUS_PX
     approach_r2 = DEMO_APPROACH_RADIUS_PX * DEMO_APPROACH_RADIUS_PX
     a = DEMO_ERR_SMOOTH_ALPHA
+    last_time = time.time()
     try:
         while cap.isOpened():
             success, frame = cap.read()
@@ -75,6 +76,11 @@ def main():
                 break
             frame_i += 1
             now = time.time()
+            dt = max(0.001, min(0.1, now - last_time))
+            last_time = now
+
+            controller.update_actual_angles(dt)
+
             firing = now < fire_until
             if serial.connected and not firing and frame_i % 120 == 1:
                 serial.send_laser_state(True, force=True)
@@ -89,12 +95,18 @@ def main():
 
             target_center = tracker.get_aim_target()
             fh, fw = frame.shape[:2]
-            aim = controller.laser_pixel((fw, fh))
+            
+            bbox_height = None
+            if tracker.status == "LOCKED" and tracker._last_bbox is not None:
+                x1, y1, x2, y2 = tracker._last_bbox
+                bbox_height = float(y2 - y1)
+
+            aim = controller.laser_pixel((fw, fh), bbox_height)
 
             move_cmd: tuple[int, int] | None = None
             err: tuple[int, int] | None = None
-            if target_center is not None:
-                err_x, err_y = controller.pixel_error(target_center, (fw, fh))
+            if target_center is not None and tracker.status == "LOCKED":
+                err_x, err_y = controller.pixel_error(target_center, (fw, fh), bbox_height)
                 if smooth_err is None:
                     smooth_err = (float(err_x), float(err_y))
                 else:
@@ -134,6 +146,10 @@ def main():
                         laser_visible = True
                         serial.send_laser_state(True, force=True)
                         print(f"Target locked — firing demo for {DEMO_FIRE_DURATION_SEC:.0f}s")
+            else:
+                lock_start = None
+                outside_since = None
+                smooth_err = None
             if firing and serial.connected:
                 if now - last_flicker_at >= FLICKER_HALF_PERIOD_SEC:
                     laser_visible = not laser_visible

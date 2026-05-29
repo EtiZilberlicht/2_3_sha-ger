@@ -56,18 +56,18 @@ def _openvino_dir(weights: Path) -> Path:
 def _load_yolo(infer_device: str) -> YOLO:
     weights = Path(config.YOLO_WEIGHTS)
     if not infer_device.startswith("intel:"):
-        model = YOLO(str(weights))
+        model = YOLO(str(weights), task="detect")
         if infer_device != "cpu":
             model.to(infer_device)
         return model
     ov_dir = _openvino_dir(weights)
     if not ov_dir.is_dir():
         print("Exporting YOLO to OpenVINO (one-time)...")
-        YOLO(str(weights)).export(format="openvino")
+        YOLO(str(weights), task="detect").export(format="openvino")
         ov_dir = _openvino_dir(weights)
     if not ov_dir.is_dir():
         raise RuntimeError("OpenVINO export failed — set DEVICE = 'cpu'")
-    return YOLO(str(ov_dir))
+    return YOLO(str(ov_dir), task="detect")
 
 
 class _ReIDBackbone(nn.Module):
@@ -114,6 +114,7 @@ class SentryTracker:
         if self._infer_device.startswith("intel:"):
             imgsz = 640
         self._yolo_kw = {
+            "task": "detect",
             "conf": config.YOLO_CONF,
             "classes": config.YOLO_CLASSES,
             "verbose": False,

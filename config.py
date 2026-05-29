@@ -60,3 +60,12 @@ LASER_HOME_Y = None
 
 # cpu | cuda (NVIDIA only) | intel:gpu | intel:cpu | intel:npu
 DEVICE = "intel:gpu"
+
+# Servo physical specifications
+SERVO_SPEED_DEG_PER_SEC = 400.0  # ~0.15s per 60 degrees
+
+# Parallax coefficients (pixels of shift per pixel of target bounding box height)
+# Set to non-zero values to compensate for camera-laser separation
+PARALLAX_K_H = 0.0
+PARALLAX_K_V = 0.0
+

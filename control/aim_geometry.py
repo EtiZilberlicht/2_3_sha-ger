@@ -4,9 +4,12 @@ import config
 
 
 class AimGeometry:
-    def home_px(self, fw: int, fh: int) -> Tuple[int, int]:
+    def home_px(self, fw: int, fh: int, bbox_height: float | None = None) -> Tuple[int, int]:
         x = config.LASER_HOME_X if config.LASER_HOME_X is not None else fw // 2
         y = config.LASER_HOME_Y if config.LASER_HOME_Y is not None else fh // 2
+        if bbox_height is not None:
+            x += int(round(getattr(config, "PARALLAX_K_H", 0.0) * bbox_height))
+            y += int(round(getattr(config, "PARALLAX_K_V", 0.0) * bbox_height))
         return x, y
 
     def px_per_deg_h(self, fw: int) -> float:
@@ -15,8 +18,15 @@ class AimGeometry:
     def px_per_deg_v(self, fh: int) -> float:
         return fh / config.CAM_FOV_DEG_V * config.V_DEG_TO_PX_SIGN
 
-    def laser_pixel(self, servo_h: int, servo_v: int, fw: int, fh: int) -> Tuple[int, int]:
-        hx, hy = self.home_px(fw, fh)
+    def laser_pixel(
+        self,
+        servo_h: float,
+        servo_v: float,
+        fw: int,
+        fh: int,
+        bbox_height: float | None = None,
+    ) -> Tuple[int, int]:
+        hx, hy = self.home_px(fw, fh, bbox_height)
         dh = servo_h - config.SERVO_INIT_H
         dv = servo_v - config.SERVO_INIT_V
         lx = int(round(hx + dh * self.px_per_deg_h(fw)))

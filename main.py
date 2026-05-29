@@ -39,6 +39,7 @@ def main():
     last_fire_angles: tuple[int, int] | None = None
     fire_until = 0.0
     last_move_at = 0.0
+    last_time = time.time()
     try:
         while cap.isOpened():
             success, frame = cap.read()
@@ -46,6 +47,11 @@ def main():
                 break
             frame_i += 1
             now = time.time()
+            dt = max(0.001, min(0.1, now - last_time))
+            last_time = now
+
+            controller.update_actual_angles(dt)
+
             firing = now < fire_until
             if serial.connected and frame_i % 120 == 1:
                 serial.send_laser_state(True, force=True)
@@ -57,12 +63,18 @@ def main():
 
             target_center = tracker.get_aim_target()
             fh, fw = frame.shape[:2]
-            aim = controller.laser_pixel((fw, fh))
+
+            bbox_height = None
+            if tracker.status == "LOCKED" and tracker._last_bbox is not None:
+                x1, y1, x2, y2 = tracker._last_bbox
+                bbox_height = float(y2 - y1)
+
+            aim = controller.laser_pixel((fw, fh), bbox_height)
 
             move_cmd: tuple[int, int] | None = None
             err: tuple[int, int] | None = None
-            if target_center is not None:
-                err_x, err_y = controller.pixel_error(target_center, (fw, fh))
+            if target_center is not None and tracker.status == "LOCKED":
+                err_x, err_y = controller.pixel_error(target_center, (fw, fh), bbox_height)
                 err = (err_x, err_y)
                 if now - last_move_at >= config.MOVE_INTERVAL_SEC:
                     h_cmd, v_cmd = controller.compute_move(err_x, err_y)
@@ -79,6 +91,8 @@ def main():
                         controller.reset_aim()
                         serial.send_laser_state(True, force=True)
                         print(f"→ Firing for {FIRE_DURATION_SEC:.0f}s")
+            else:
+                controller.reset_aim()
             if firing and serial.connected:
                 serial.send_laser_state(True, force=True)
             annotated_frame = ui.draw_hud(

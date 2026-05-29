@@ -14,23 +14,42 @@ class TurretController:
         self._last_fh = 480
         self._h_angle = config.SERVO_INIT_H
         self._v_angle = config.SERVO_INIT_V
+        self._h_actual = float(config.SERVO_INIT_H)
+        self._v_actual = float(config.SERVO_INIT_V)
 
     @property
     def servo_angles(self) -> Tuple[int, int]:
-        return self._h_angle, self._v_angle
+        return int(round(self._h_actual)), int(round(self._v_actual))
 
-    def laser_pixel(self, frame_size: Tuple[int, int]) -> Tuple[int, int]:
+    def update_actual_angles(self, dt: float) -> None:
+        speed = getattr(config, "SERVO_SPEED_DEG_PER_SEC", 400.0)
+        max_step = speed * dt
+
+        dh = self._h_angle - self._h_actual
+        if abs(dh) <= max_step:
+            self._h_actual = float(self._h_angle)
+        else:
+            self._h_actual += max_step if dh > 0 else -max_step
+
+        dv = self._v_angle - self._v_actual
+        if abs(dv) <= max_step:
+            self._v_actual = float(self._v_angle)
+        else:
+            self._v_actual += max_step if dv > 0 else -max_step
+
+    def laser_pixel(self, frame_size: Tuple[int, int], bbox_height: float | None = None) -> Tuple[int, int]:
         fw, fh = frame_size
-        return self.geometry.laser_pixel(self._h_angle, self._v_angle, fw, fh)
+        return self.geometry.laser_pixel(self._h_actual, self._v_actual, fw, fh, bbox_height)
 
     def pixel_error(
         self,
         target: Tuple[int, int],
         frame_size: Tuple[int, int],
+        bbox_height: float | None = None,
     ) -> Tuple[int, int]:
         fw, fh = frame_size
         self._last_fw, self._last_fh = fw, fh
-        laser = self.geometry.laser_pixel(self._h_angle, self._v_angle, fw, fh)
+        laser = self.geometry.laser_pixel(self._h_angle, self._v_angle, fw, fh, bbox_height)
         return self.geometry.pixel_error(target, laser)
 
     @staticmethod
@@ -78,6 +97,8 @@ class TurretController:
     def reset_home(self) -> None:
         self._h_angle = config.SERVO_INIT_H
         self._v_angle = config.SERVO_INIT_V
+        self._h_actual = float(config.SERVO_INIT_H)
+        self._v_actual = float(config.SERVO_INIT_V)
         self.lock_frame_counter = 0
 
     def reset_aim(self) -> None:
