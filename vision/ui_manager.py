@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import time
 from typing import Optional, Tuple
 
 import cv2
@@ -89,8 +90,14 @@ class UIManager:
             bx, by = int(x1 + (x2 - x1) * t1), int(y1 + (y2 - y1) * t1)
             cv2.line(img, (ax, ay), (bx, by), color, 1, cv2.LINE_AA)
 
-    def _draw_top_bar(self, img: np.ndarray, status: str, target_center: Optional[Tuple[int, int]]) -> None:
+    def _draw_top_bar(
+        self, img: np.ndarray, status: str, target_center: Optional[Tuple[int, int]], firing: bool = False
+    ) -> None:
         accent, panel = self._status_style(status)
+        if firing:
+            pulse = 0.85 + 0.15 * np.sin(time.time() * 15.0)
+            accent = (int(50 * pulse), int(50 * pulse), int(255 * pulse))
+            panel = (20, 20, 75)
         self._blend_rect(img, 0, 0, img.shape[1], 56, panel, 0.72)
         cv2.line(img, (0, 56), (img.shape[1], 56), accent, 2, cv2.LINE_AA)
         sub = (
@@ -105,8 +112,11 @@ class UIManager:
             self._text(img, "SEARCHING", (18, 30), 0.85, gray, 2)
             self._text(img, "Click to lock target", (18, 50), 0.48, gray, 1)
         else:
-            self._text(img, status, (18, 38), 0.95, accent, 2)
-            if sub:
+            display_status = "FIRING" if firing else status
+            self._text(img, display_status, (18, 38), 0.95, accent, 2)
+            if firing:
+                self._text(img, "ACTIVE ENGAGEMENT", (160, 38), 0.52, (180, 180, 255), 1)
+            elif sub:
                 self._text(img, sub, (160, 38), 0.52, (235, 238, 245), 1)
         self._text(img, "SENTRY AI", (img.shape[1] - 130, 28), 0.55, (210, 215, 225), 1)
         self._text(img, "LASER · MATH", (img.shape[1] - 130, 48), 0.45, gray if status == "SEARCHING" else accent, 1)
@@ -162,10 +172,15 @@ class UIManager:
         move_cmd: Optional[Tuple[int, int]] = None,
         err: Optional[Tuple[int, int]] = None,
         servo_angles: Optional[Tuple[int, int]] = None,
+        firing: bool = False,
     ) -> np.ndarray:
         out = frame.copy()
         h, w = out.shape[:2]
         accent, _ = self._status_style(status)
+
+        if firing:
+            pulse = 0.85 + 0.15 * np.sin(time.time() * 15.0)
+            accent = (int(50 * pulse), int(50 * pulse), int(255 * pulse))
 
         if mask is not None and mask.shape[0] == h and mask.shape[1] == w:
             tint = np.zeros_like(out)
@@ -183,8 +198,26 @@ class UIManager:
             self._draw_target(out, target_center[0], target_center[1], accent)
 
         self._draw_corners(out, accent)
-        self._draw_top_bar(out, status, target_center)
+        self._draw_top_bar(out, status, target_center, firing=firing)
         self._draw_bottom_bar(out, err, move_cmd, servo_angles)
+
+        if firing:
+            # Pulsing neon red border around the whole video feed
+            cv2.rectangle(out, (0, 0), (w - 1, h - 1), accent, 4)
+            
+            # Blinking center-top alert badge
+            blink = int(time.time() * 4) % 2 == 0
+            if blink:
+                warn_text = "WARNING: SHOOTING"
+                scale = 0.50
+                thickness = 1
+                (tw, th), baseline = cv2.getTextSize(warn_text, cv2.FONT_HERSHEY_SIMPLEX, scale, thickness)
+                bx = w // 2 - tw // 2
+                by = 85
+                pad_x, pad_y = 12, 6
+                self._blend_rect(out, bx - pad_x, by - th - pad_y, bx + tw + pad_x, by + pad_y, (15, 15, 75), 0.8)
+                cv2.rectangle(out, (bx - pad_x, by - th - pad_y), (bx + tw + pad_x, by + pad_y), accent, 1, cv2.LINE_AA)
+                self._text(out, warn_text, (bx, by - 2), scale, (200, 200, 255), thickness)
 
         return out
 

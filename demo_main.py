@@ -174,6 +174,7 @@ def main():
                 move_cmd,
                 err,
                 controller.servo_angles,
+                firing=firing,
             )
             cv2.imshow("Sentry AI Turret", annotated_frame)
             if cv2.waitKey(1) & 0xFF == ord("q"):
