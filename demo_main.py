@@ -11,24 +11,10 @@ from vision.ui_manager import UIManager
 DEMO_FIRE_DURATION_SEC = 10.0
 DEMO_FIRE_RADIUS_PX = 15
 DEMO_APPROACH_RADIUS_PX = 20
-DEMO_LOCK_DURATION_SEC = 2.0
+DEMO_LOCK_DURATION_SEC = 3.0
 DEMO_LOCK_BREAK_SEC = 0.5
 DEMO_ERR_SMOOTH_ALPHA = 0.18
 FLICKER_HALF_PERIOD_SEC = 0.15
-
-
-def _release_target(tracker: SentryTracker) -> None:
-    tracker.status = "SEARCHING"
-    tracker.target_embedding = None
-    tracker._track_id = None
-    tracker._pick_track = True
-    tracker._last_bbox = None
-    tracker._last_center = None
-    tracker.current_mask = None
-    tracker._embed_gallery.clear()
-    tracker._lost_frames = 0
-    tracker._reid_mismatch_frames = 0
-    tracker._aim_reset = True
 
 
 def main():
@@ -160,7 +146,7 @@ def main():
                 lock_start = None
                 outside_since = None
                 smooth_err = None
-                _release_target(tracker)
+                tracker.release_target()
                 last_fire_angles = None
                 if serial.connected:
                     serial.send_laser_state(True, force=True)

@@ -1,6 +1,6 @@
 PORT = "COM3"
 BAUDRATE = 9600
-CAMERA_ID = 1
+CAMERA_ID = 0
 
 YOLO_WEIGHTS = "yolov8n.pt"
 YOLO_TRACKER = "bytetrack.yaml"
@@ -31,23 +31,23 @@ LOST_REID_INTERVAL = 2
 REACQUIRE_SPATIAL_BASE_PX = 180
 REACQUIRE_SPATIAL_EXPAND_PX = 8
 
-CAM_FOV_DEG_H = 60.0
-CAM_FOV_DEG_V = 45.0
+CAM_FOV_DEG_H = 110.0
+CAM_FOV_DEG_V = 80.0
 H_DEG_TO_PX_SIGN = -1
 V_DEG_TO_PX_SIGN = 1
 MIN_MOVE_PX = 6
 MIN_CMD_DEG = 1
-MAX_CMD_DEG = 5
-MAX_CMD_DEG_LARGE = 9
+MAX_CMD_DEG = 10
+MAX_CMD_DEG_LARGE = 18
 LARGE_ERR_PX = 40
-MAX_CMD_DEG_V = 4
+MAX_CMD_DEG_V = 8
 MOVE_INTERVAL_SEC = 0.12
 
 SERVO_H_MIN = 0
 SERVO_H_MAX = 130
 SERVO_V_MIN = 0
-SERVO_V_MAX = 70
-SERVO_INIT_H = 75
+SERVO_V_MAX = 90
+SERVO_INIT_H = 80
 SERVO_INIT_V = 20
 
 FIRE_RADIUS_PX = 18
@@ -55,8 +55,11 @@ STABLE_FRAMES_TO_FIRE = 8
 
 SMOOTH_ALPHA = 0.35
 
-LASER_HOME_X = None
-LASER_HOME_Y = None
+# Laser home position in pixels (corresponds to the initial servo angles).
+# If None, defaults to the center of the frame (320, 240 for a 640x480 resolution).
+# Set to shift the predicted laser symbol lower and more to the right to synchronize with the physical laser:
+LASER_HOME_X = 150  # Increase to shift right, decrease to shift left
+LASER_HOME_Y = 340  # Increase to shift down, decrease to shift up
 
 # cpu | cuda (NVIDIA only) | intel:gpu | intel:cpu | intel:npu
 DEVICE = "intel:gpu"

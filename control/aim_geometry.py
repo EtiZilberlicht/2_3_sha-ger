@@ -42,9 +42,5 @@ class AimGeometry:
 
     def error_to_servo_delta(self, err_x: int, err_y: int, fw: int, fh: int) -> Tuple[float, float]:
         dh = err_x / self.px_per_deg_h(fw)
-        dv = 0.0
-        if err_y > 0:
-            dv = err_y / self.px_per_deg_v(fh)
-        elif err_y < 0:
-            dh += err_y / self.px_per_deg_v(fh)
+        dv = err_y / self.px_per_deg_v(fh)
         return dh, dv

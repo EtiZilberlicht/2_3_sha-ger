@@ -1,7 +1,7 @@
 import time
 import serial
 
-PORT = "COM3"        # לשנות לפי הפורט של הארדואינו
+PORT = "COM3"        # Change based on the Arduino port
 BAUD_RATE = 9600
 
 def send_command(ser, command):
@@ -12,7 +12,7 @@ def send_command(ser, command):
 
 def main():
     with serial.Serial(PORT, BAUD_RATE, timeout=1) as ser:
-        time.sleep(2)  # זמן לארדואינו להתאפס
+        time.sleep(2)  # Allow time for the Arduino to reset
 
         # print("=== Test 1: Fire laser ===")
         # send_command(ser, "FIRE")

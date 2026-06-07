@@ -451,3 +451,17 @@ class SentryTracker:
             self._last_center = center
             return center
         return None
+
+    def release_target(self) -> None:
+        """Resets the tracking state and returns the tracker to searching mode."""
+        self.status = "SEARCHING"
+        self.target_embedding = None
+        self._track_id = None
+        self._pick_track = True
+        self._last_bbox = None
+        self._last_center = None
+        self.current_mask = None
+        self._embed_gallery.clear()
+        self._lost_frames = 0
+        self._reid_mismatch_frames = 0
+        self._aim_reset = True
