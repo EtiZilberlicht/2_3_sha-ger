@@ -7,9 +7,8 @@ from control.aim_geometry import AimGeometry
 class TurretController:
     def __init__(self, geometry: AimGeometry | None = None) -> None:
         self.geometry = geometry or AimGeometry()
-        self.lock_frame_counter = 0
+        self._on_target_since: float | None = None
         self._fire_r2 = config.FIRE_RADIUS_PX * config.FIRE_RADIUS_PX
-        self._stable_need = config.STABLE_FRAMES_TO_FIRE
         self._last_fw = 640
         self._last_fh = 480
         self._h_angle = config.SERVO_INIT_H
@@ -99,15 +98,18 @@ class TurretController:
         self._v_angle = config.SERVO_INIT_V
         self._h_actual = float(config.SERVO_INIT_H)
         self._v_actual = float(config.SERVO_INIT_V)
-        self.lock_frame_counter = 0
+        self._on_target_since = None
 
     def reset_aim(self) -> None:
-        self.lock_frame_counter = 0
+        self._on_target_since = None
 
-    def validate_fire(self, error_x: int, error_y: int) -> bool:
+    def validate_fire(self, error_x: int, error_y: int, now: float) -> bool:
         d2 = error_x * error_x + error_y * error_y
         if d2 <= self._fire_r2:
-            self.lock_frame_counter += 1
+            if self._on_target_since is None:
+                self._on_target_since = now
         else:
-            self.lock_frame_counter = 0
-        return self.lock_frame_counter >= self._stable_need
+            self._on_target_since = None
+        if self._on_target_since is None:
+            return False
+        return (now - self._on_target_since) >= config.LOCK_ON_TARGET_SEC

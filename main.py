@@ -85,7 +85,7 @@ def main():
                 if not firing:
                     angles = controller.servo_angles
                     moved_since_fire = last_fire_angles is None or angles != last_fire_angles
-                    if moved_since_fire and controller.validate_fire(err_x, err_y):
+                    if moved_since_fire and controller.validate_fire(err_x, err_y, now):
                         fire_until = now + FIRE_DURATION_SEC
                         last_fire_angles = angles
                         controller.reset_aim()
