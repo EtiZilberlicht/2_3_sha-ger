@@ -18,6 +18,43 @@ class UIManager:
 
     def __init__(self, window_name: str = "Sentry AI Turret") -> None:
         self.window_name = window_name
+        self._frame_w = 640
+        self._frame_h = 480
+        self._display_w = 640
+        self._display_h = 480
+
+    def set_frame_size(self, w: int, h: int) -> None:
+        self._frame_w, self._frame_h = w, h
+
+    @staticmethod
+    def screen_size() -> Tuple[int, int]:
+        try:
+            import ctypes
+            user32 = ctypes.windll.user32
+            return int(user32.GetSystemMetrics(0)), int(user32.GetSystemMetrics(1))
+        except Exception:
+            return 1920, 1080
+
+    def prepare_display(self, frame: np.ndarray, fullscreen: bool) -> np.ndarray:
+        h, w = frame.shape[:2]
+        self.set_frame_size(w, h)
+        if not fullscreen:
+            self.set_display_size(w, h)
+            return frame
+        sw, sh = self.screen_size()
+        display = cv2.resize(frame, (sw, sh), interpolation=cv2.INTER_LINEAR)
+        self.set_display_size(sw, sh)
+        return display
+
+    def set_display_size(self, w: int, h: int) -> None:
+        self._display_w, self._display_h = w, h
+
+    def _to_frame_coords(self, x: int, y: int) -> Tuple[int, int]:
+        if self._display_w <= 0 or self._display_h <= 0:
+            return x, y
+        fx = int(round(x * self._frame_w / self._display_w))
+        fy = int(round(y * self._frame_h / self._display_h))
+        return max(0, min(self._frame_w - 1, fx)), max(0, min(self._frame_h - 1, fy))
 
     @staticmethod
     def _blend_rect(
@@ -227,5 +264,6 @@ class UIManager:
         tracker = param
         if not isinstance(tracker, SentryTracker) or tracker.last_frame is None:
             return
-        tracker.set_target_from_click(tracker.last_frame, x, y)
+        fx, fy = self._to_frame_coords(x, y)
+        tracker.set_target_from_click(tracker.last_frame, fx, fy)
 

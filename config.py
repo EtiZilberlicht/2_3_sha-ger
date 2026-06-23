@@ -1,6 +1,7 @@
 PORT = "COM3"
 BAUDRATE = 9600
-CAMERA_ID = 0
+CAMERA_ID = 1
+FULLSCREEN = True
 
 YOLO_WEIGHTS = "yolov8n.pt"
 YOLO_TRACKER = "bytetrack.yaml"

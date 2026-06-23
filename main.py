@@ -33,8 +33,13 @@ def main():
         cap = cv2.VideoCapture(config.CAMERA_ID)
     if not cap.isOpened():
         raise RuntimeError(f"Camera {config.CAMERA_ID} not found — change CAMERA_ID in config.py")
-    cv2.namedWindow("Sentry AI Turret")
-    cv2.setMouseCallback("Sentry AI Turret", ui.mouse_callback, param=tracker)
+    cv2.namedWindow(ui.window_name, cv2.WINDOW_NORMAL)
+    if config.FULLSCREEN:
+        sw, sh = ui.screen_size()
+        cv2.resizeWindow(ui.window_name, sw, sh)
+        cv2.moveWindow(ui.window_name, 0, 0)
+        ui.set_display_size(sw, sh)
+    cv2.setMouseCallback(ui.window_name, ui.mouse_callback, param=tracker)
     frame_i = 0
     last_fire_angles: tuple[int, int] | None = None
     fire_until = 0.0
@@ -95,6 +100,7 @@ def main():
                 controller.reset_aim()
             if firing and serial.connected:
                 serial.send_laser_state(True, force=True)
+            ui.set_frame_size(fw, fh)
             annotated_frame = ui.draw_hud(
                 frame,
                 tracker.status,
@@ -106,9 +112,19 @@ def main():
                 controller.servo_angles,
                 firing=firing,
             )
-            cv2.imshow("Sentry AI Turret", annotated_frame)
-            if cv2.waitKey(1) & 0xFF == ord("q"):
+            display_frame = ui.prepare_display(annotated_frame, config.FULLSCREEN)
+            cv2.imshow(ui.window_name, display_frame)
+            key = cv2.waitKey(1) & 0xFF
+            if key == ord("q"):
                 break
+            if key == ord("f"):
+                config.FULLSCREEN = not config.FULLSCREEN
+                if config.FULLSCREEN:
+                    sw, sh = ui.screen_size()
+                    cv2.resizeWindow(ui.window_name, sw, sh)
+                    cv2.moveWindow(ui.window_name, 0, 0)
+                else:
+                    cv2.resizeWindow(ui.window_name, fw, fh)
     finally:
         print("Shutting down — laser off, turret home...")
         serial.shutdown(controller)
